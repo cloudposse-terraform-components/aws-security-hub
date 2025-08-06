@@ -60,7 +60,7 @@ module "security_hub" {
   context = module.this.context
 }
 
-# If we are running in the AWS Org designated administrator account with admin_delegated set to tru, set the AWS
+# If we are running in the AWS Org designated administrator account with admin_delegated set to true, set the AWS
 # Organization-wide Security Hub configuration by configuring all other accounts to send their Security Hub findings to
 # this account.
 resource "awsutils_security_hub_organization_settings" "this" {

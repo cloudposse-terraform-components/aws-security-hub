@@ -28,7 +28,7 @@ variable "auto_enable_organization_members" {
 
 variable "cloudwatch_event_rule_pattern_detail_type" {
   type        = string
-  default     = "ecurity Hub Findings - Imported"
+  default     = "Security Hub Findings - Imported"
   description = <<-DOC
   The detail-type pattern used to match events that will be sent to SNS.
 
