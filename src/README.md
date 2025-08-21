@@ -49,7 +49,6 @@ Here are the key features and capabilities of Amazon Security Hub:
 
 By utilizing Amazon Security Hub, organizations can improve their security posture, gain insights into security risks,
 and effectively manage security compliance across their AWS accounts and resources.
-
 ## Usage
 
 **Stack Level**: Regional
@@ -156,7 +155,10 @@ atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 ```
 
 <!-- prettier-ignore-start -->
-<!-- BEGINNING OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
+<!-- prettier-ignore-end -->
+
+
+<!-- markdownlint-disable -->
 ## Requirements
 
 | Name | Version |
@@ -243,12 +245,19 @@ atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 | <a name="output_delegated_administrator_account_id"></a> [delegated\_administrator\_account\_id](#output\_delegated\_administrator\_account\_id) | The AWS Account ID of the AWS Organization delegated administrator account |
 | <a name="output_sns_topic_name"></a> [sns\_topic\_name](#output\_sns\_topic\_name) | The name of the SNS topic created by the component |
 | <a name="output_sns_topic_subscriptions"></a> [sns\_topic\_subscriptions](#output\_sns\_topic\_subscriptions) | The SNS topic subscriptions created by the component |
-<!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
-<!-- prettier-ignore-end -->
+<!-- markdownlint-restore -->
+
+
 
 ## References
 
-- [AWS Security Hub Documentation](https://aws.amazon.com/security-hub/)
-- [Cloud Posse's upstream component](https://github.com/cloudposse/terraform-aws-components/tree/main/modules/security-hub)
+
+- [AWS Security Hub Documentation](https://aws.amazon.com/security-hub/) - 
+
+- [Cloud Posse's upstream component](https://github.com/cloudposse/terraform-aws-components/tree/main/modules/security-hub) - 
+
+
+
 
 [<img src="https://cloudposse.com/logo-300x69.svg" height="32" align="right"/>](https://cpco.io/homepage?utm_source=github&utm_medium=readme&utm_campaign=cloudposse-terraform-components/aws-security-hub&utm_content=)
+
