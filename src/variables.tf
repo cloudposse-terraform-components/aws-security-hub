@@ -4,6 +4,12 @@ variable "account_map_tenant" {
   description = "The tenant where the `account_map` component required by remote-state is deployed"
 }
 
+variable "account_map_component_name" {
+  type        = string
+  description = "The name of the account-map component"
+  default     = "account-map"
+}
+
 variable "admin_delegated" {
   type        = bool
   default     = false
