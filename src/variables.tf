@@ -29,7 +29,6 @@ variable "auto_enable_organization_members" {
   For more information, see:
   https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_organization_configuration#auto_enable
   DOC
-
 }
 
 variable "cloudwatch_event_rule_pattern_detail_type" {
