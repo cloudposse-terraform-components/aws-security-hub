@@ -24,6 +24,10 @@ data "aws_region" "this" {
   count = local.enabled ? 1 : 0
 }
 
+data "aws_partition" "this" {
+  count = local.enabled ? 1 : 0
+}
+
 # If we are running in the AWS Org Management account, delegate Security Hub to the Delegated Administrator account
 # (usually the security account). We also need to turn on Security Hub in the Management account so that it can
 # aggregate findings and be managed by the Delegated Administrator account.

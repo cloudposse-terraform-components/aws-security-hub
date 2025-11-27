@@ -191,3 +191,33 @@ variable "subscribers" {
     wrapped in JSON with the original message in the message property). Default is false.
   DOC
 }
+
+variable "product_subscriptions" {
+  type = object({
+    guardduty        = optional(bool, true)
+    inspector        = optional(bool, true)
+    macie            = optional(bool, true)
+    config           = optional(bool, true)
+    access_analyzer  = optional(bool, true)
+    firewall_manager = optional(bool, false)
+  })
+  description = <<-DOC
+  Map of AWS service product subscriptions to enable in Security Hub.
+  Product subscriptions allow Security Hub to receive findings from AWS security services.
+
+  Default values:
+  - guardduty: true (enable GuardDuty findings integration)
+  - inspector: true (enable Inspector findings integration)
+  - macie: true (enable Macie findings integration)
+  - config: true (enable Config findings integration)
+  - access_analyzer: true (enable Access Analyzer findings integration)
+  - firewall_manager: false (disabled by default - enable if using Firewall Manager)
+
+  Note: Product subscriptions can be enabled even if the source service is not yet deployed.
+  The subscription will simply wait for findings once the service is enabled.
+
+  For more information, see:
+  https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-findings-providers.html
+  DOC
+  default     = {}
+}

@@ -242,8 +242,15 @@ atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 | [aws_securityhub_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_account) | resource |
 | [aws_securityhub_organization_admin_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_organization_admin_account) | resource |
 | [aws_securityhub_organization_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_organization_configuration) | resource |
+| [aws_securityhub_product_subscription.access_analyzer](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.config](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.firewall_manager](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.guardduty](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.inspector](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.macie](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
 | [awsutils_security_hub_organization_settings.this](https://registry.terraform.io/providers/cloudposse/awsutils/latest/docs/resources/security_hub_organization_settings) | resource |
 | [aws_caller_identity.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
+| [aws_partition.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
 | [aws_region.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
 ## Inputs
@@ -283,6 +290,7 @@ atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 | <a name="input_namespace"></a> [namespace](#input\_namespace) | ID element. Usually an abbreviation of your organization name, e.g. 'eg' or 'cp', to help ensure generated IDs are globally unique | `string` | `null` | no |
 | <a name="input_organization_management_account_name"></a> [organization\_management\_account\_name](#input\_organization\_management\_account\_name) | The name of the AWS Organization management account | `string` | `null` | no |
 | <a name="input_privileged"></a> [privileged](#input\_privileged) | true if the default provider already has access to the backend | `bool` | `false` | no |
+| <a name="input_product_subscriptions"></a> [product\_subscriptions](#input\_product\_subscriptions) | Map of AWS service product subscriptions to enable in Security Hub.<br/>Product subscriptions allow Security Hub to receive findings from AWS security services.<br/><br/>Default values:<br/>- guardduty: true (enable GuardDuty findings integration)<br/>- inspector: true (enable Inspector findings integration)<br/>- macie: true (enable Macie findings integration)<br/>- config: true (enable Config findings integration)<br/>- access\_analyzer: true (enable Access Analyzer findings integration)<br/>- firewall\_manager: false (disabled by default - enable if using Firewall Manager)<br/><br/>Note: Product subscriptions can be enabled even if the source service is not yet deployed.<br/>The subscription will simply wait for findings once the service is enabled.<br/><br/>For more information, see:<br/>https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-findings-providers.html | <pre>object({<br/>    guardduty        = optional(bool, true)<br/>    inspector        = optional(bool, true)<br/>    macie            = optional(bool, true)<br/>    config           = optional(bool, true)<br/>    access_analyzer  = optional(bool, true)<br/>    firewall_manager = optional(bool, false)<br/>  })</pre> | `{}` | no |
 | <a name="input_regex_replace_chars"></a> [regex\_replace\_chars](#input\_regex\_replace\_chars) | Terraform regular expression (regex) string.<br/>Characters matching the regex will be removed from the ID elements.<br/>If not set, `"/[^a-zA-Z0-9-]/"` is used to remove all characters other than hyphens, letters and digits. | `string` | `null` | no |
 | <a name="input_region"></a> [region](#input\_region) | AWS Region | `string` | n/a | yes |
 | <a name="input_root_account_stage"></a> [root\_account\_stage](#input\_root\_account\_stage) | The stage name for the Organization root (management) account. This is used to lookup account IDs from account names<br/>using the `account-map` component. | `string` | `"root"` | no |
@@ -296,6 +304,7 @@ atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 | Name | Description |
 |------|-------------|
 | <a name="output_delegated_administrator_account_id"></a> [delegated\_administrator\_account\_id](#output\_delegated\_administrator\_account\_id) | The AWS Account ID of the AWS Organization delegated administrator account |
+| <a name="output_product_subscriptions"></a> [product\_subscriptions](#output\_product\_subscriptions) | ARNs of Security Hub product subscriptions for AWS service integrations |
 | <a name="output_sns_topic_name"></a> [sns\_topic\_name](#output\_sns\_topic\_name) | The name of the SNS topic created by the component |
 | <a name="output_sns_topic_subscriptions"></a> [sns\_topic\_subscriptions](#output\_sns\_topic\_subscriptions) | The SNS topic subscriptions created by the component |
 <!-- markdownlint-restore -->
