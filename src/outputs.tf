@@ -15,8 +15,8 @@ output "sns_topic_subscriptions" {
 
 output "product_subscriptions" {
   value = local.create_securityhub ? {
-    for key, service in local.product_subscription_services :
-    key => try(aws_securityhub_product_subscription.this[key].arn, null)
+    for key, service in local.enabled_product_subscriptions :
+    key => aws_securityhub_product_subscription.this[key].arn
   } : null
   description = "ARNs of Security Hub product subscriptions for AWS service integrations"
 }
