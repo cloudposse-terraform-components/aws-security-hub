@@ -114,9 +114,9 @@ components:
     security-hub/root/ue1:
       metadata:
         component: security-hub
-    backend:
-      s3:
-        role_arn: null
+      backend:
+        s3:
+          role_arn: null
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
@@ -148,7 +148,7 @@ components:
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
-        environment: use1
+        environment: ue1
         region: us-east-1
         admin_delegated: true
 ```
