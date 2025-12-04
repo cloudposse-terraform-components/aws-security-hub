@@ -13,42 +13,40 @@ Amazon Security Hub enables users to centrally manage and monitor the security a
 resources. It aggregates, organizes, and prioritizes security findings from various AWS services, third-party tools, and
 integrated partner solutions.
 
-Here are the key features and capabilities of Amazon Security Hub:
+## Key Features
 
-- Centralized security management: Security Hub provides a centralized dashboard where users can view and manage
-  security findings from multiple AWS accounts and regions. This allows for a unified view of the security posture
-  across the entire AWS environment.
+- **Centralized Security Management**: Provides a centralized dashboard where users can view and manage security
+  findings from multiple AWS accounts and regions, allowing for a unified view of the security posture across the
+  entire AWS environment.
 
-- Automated security checks: Security Hub automatically performs continuous security checks on AWS resources,
-  configurations, and security best practices. It leverages industry standards and compliance frameworks, such as AWS
-  CIS Foundations Benchmark, to identify potential security issues.
+- **Automated Security Checks**: Automatically performs continuous security checks on AWS resources, configurations,
+  and security best practices using industry standards and compliance frameworks such as AWS CIS Foundations Benchmark.
 
-- Integrated partner solutions: Security Hub integrates with a wide range of AWS native services, as well as third-party
-  security products and solutions. This integration enables the ingestion and analysis of security findings from diverse
-  sources, offering a comprehensive security view.
+- **Product Subscriptions**: Integrates with AWS security services (GuardDuty, Inspector, Macie, Config, Access
+  Analyzer, Firewall Manager) to automatically receive and aggregate findings in a single dashboard.
 
-- Security standards and compliance: Security Hub provides compliance checks against industry standards and regulatory
-  frameworks, such as PCI DSS, HIPAA, and GDPR. It identifies non-compliant resources and provides guidance on
-  remediation actions to ensure adherence to security best practices.
+- **Security Standards and Compliance**: Provides compliance checks against industry standards and regulatory
+  frameworks such as PCI DSS, HIPAA, NIST 800-53, and GDPR, with guidance on remediation actions.
 
-- Prioritized security findings: Security Hub analyzes and prioritizes security findings based on severity, enabling
-  users to focus on the most critical issues. It assigns severity levels and generates a consolidated view of security
-  alerts, allowing for efficient threat response and remediation.
+- **Prioritized Security Findings**: Analyzes and prioritizes security findings based on severity, enabling users to
+  focus on the most critical issues with efficient threat response and remediation.
 
-- Custom insights and event aggregation: Security Hub supports custom insights, allowing users to create their own rules
-  and filters to focus on specific security criteria or requirements. It also provides event aggregation and correlation
-  capabilities to identify related security findings and potential attack patterns.
+- **Custom Insights and Event Aggregation**: Supports custom insights and rules to focus on specific security criteria,
+  with event aggregation and correlation capabilities to identify related findings and attack patterns.
 
-- Integration with other AWS services: Security Hub seamlessly integrates with other AWS services, such as AWS
-  CloudTrail, Amazon GuardDuty, AWS Config, and AWS IAM Access Analyzer. This integration allows for enhanced
-  visibility, automated remediation, and streamlined security operations.
+- **Alert Notifications and Automation**: Supports alert notifications through Amazon SNS and facilitates automation
+  through integration with AWS Lambda for automated remediation actions.
 
-- Alert notifications and automation: Security Hub supports alert notifications through Amazon SNS, enabling users to
-  receive real-time notifications of security findings. It also facilitates automation and response through integration
-  with AWS Lambda, allowing for automated remediation actions.
+- **GovCloud Support**: All product subscription ARNs use partition-aware format, automatically supporting both
+  Commercial AWS and GovCloud partitions.
 
-By utilizing Amazon Security Hub, organizations can improve their security posture, gain insights into security risks,
-and effectively manage security compliance across their AWS accounts and resources.
+## Component Features
+
+- **Delegated Administrator Model**: Uses AWS Organizations delegated administrator pattern for centralized management
+- **Multi-Region Deployment**: Supports deployment across all AWS regions with finding aggregation
+- **Product Subscriptions**: Automatically creates subscriptions for AWS security service integrations
+- **SNS Notifications**: Optional SNS topic creation for security finding alerts
+- **Compliance Standards**: Configurable security standards (CIS, PCI DSS, AWS Foundational Security Best Practices)
 ## Usage
 
 **Stack Level**: Regional
@@ -83,6 +81,14 @@ components:
         delegated_administrator_account_name: core-security
         environment: ue1
         region: us-east-1
+        # Product subscriptions for AWS security service integrations
+        product_subscriptions:
+          guardduty: true        # Enable GuardDuty findings
+          inspector: true        # Enable Inspector findings
+          macie: true            # Enable Macie findings
+          config: true           # Enable Config findings
+          access_analyzer: true  # Enable Access Analyzer findings
+          firewall_manager: false # Disabled by default
 ```
 
 ```bash
@@ -108,9 +114,9 @@ components:
     security-hub/root/ue1:
       metadata:
         component: security-hub
-    backend:
-      s3:
-        role_arn: null
+      backend:
+        s3:
+          role_arn: null
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
@@ -142,7 +148,7 @@ components:
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
-        environment: use1
+        environment: ue1
         region: us-east-1
         admin_delegated: true
 ```
@@ -152,6 +158,35 @@ atmos terraform apply security-hub/org-settings/ue1 -s core-ue1-security
 atmos terraform apply security-hub/org-settings/ue2 -s core-ue2-security
 atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 # ... other regions
+```
+
+## Product Subscriptions
+
+Product subscriptions enable Security Hub to receive and aggregate findings from AWS security services. The component
+supports automatic integration with:
+
+| Product          | Default | Description                          |
+|------------------|---------|--------------------------------------|
+| GuardDuty        | `true`  | Threat detection findings            |
+| Inspector        | `true`  | Vulnerability scanning findings      |
+| Macie            | `true`  | Sensitive data discovery findings    |
+| Config           | `true`  | Configuration compliance findings    |
+| Access Analyzer  | `true`  | External access findings             |
+| Firewall Manager | `false` | Firewall policy compliance findings  |
+
+Product subscriptions are only created during Step 1 (delegated administrator deployment) and use partition-aware ARN
+format for GovCloud compatibility.
+
+### Verification
+
+After deployment, verify product subscriptions:
+
+```bash
+# Via Terraform output
+atmos terraform output security-hub/delegated-administrator/ue1 -s core-ue1-security
+
+# Via AWS CLI
+aws securityhub list-enabled-products-for-import --region us-east-1
 ```
 
 <!-- prettier-ignore-start -->
@@ -190,8 +225,15 @@ atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 | [aws_securityhub_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_account) | resource |
 | [aws_securityhub_organization_admin_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_organization_admin_account) | resource |
 | [aws_securityhub_organization_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_organization_configuration) | resource |
+| [aws_securityhub_product_subscription.access_analyzer](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.config](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.firewall_manager](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.guardduty](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.inspector](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
+| [aws_securityhub_product_subscription.macie](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
 | [awsutils_security_hub_organization_settings.this](https://registry.terraform.io/providers/cloudposse/awsutils/latest/docs/resources/security_hub_organization_settings) | resource |
 | [aws_caller_identity.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
+| [aws_partition.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
 | [aws_region.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
 ## Inputs
@@ -231,6 +273,7 @@ atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 | <a name="input_namespace"></a> [namespace](#input\_namespace) | ID element. Usually an abbreviation of your organization name, e.g. 'eg' or 'cp', to help ensure generated IDs are globally unique | `string` | `null` | no |
 | <a name="input_organization_management_account_name"></a> [organization\_management\_account\_name](#input\_organization\_management\_account\_name) | The name of the AWS Organization management account | `string` | `null` | no |
 | <a name="input_privileged"></a> [privileged](#input\_privileged) | true if the default provider already has access to the backend | `bool` | `false` | no |
+| <a name="input_product_subscriptions"></a> [product\_subscriptions](#input\_product\_subscriptions) | Map of AWS service product subscriptions to enable in Security Hub.<br/>Product subscriptions allow Security Hub to receive findings from AWS security services.<br/><br/>Default values:<br/>- guardduty: true (enable GuardDuty findings integration)<br/>- inspector: true (enable Inspector findings integration)<br/>- macie: true (enable Macie findings integration)<br/>- config: true (enable Config findings integration)<br/>- access\_analyzer: true (enable Access Analyzer findings integration)<br/>- firewall\_manager: false (disabled by default - enable if using Firewall Manager)<br/><br/>Note: Product subscriptions can be enabled even if the source service is not yet deployed.<br/>The subscription will simply wait for findings once the service is enabled.<br/><br/>For more information, see:<br/>https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-findings-providers.html | <pre>object({<br/>    guardduty        = optional(bool, true)<br/>    inspector        = optional(bool, true)<br/>    macie            = optional(bool, true)<br/>    config           = optional(bool, true)<br/>    access_analyzer  = optional(bool, true)<br/>    firewall_manager = optional(bool, false)<br/>  })</pre> | `{}` | no |
 | <a name="input_regex_replace_chars"></a> [regex\_replace\_chars](#input\_regex\_replace\_chars) | Terraform regular expression (regex) string.<br/>Characters matching the regex will be removed from the ID elements.<br/>If not set, `"/[^a-zA-Z0-9-]/"` is used to remove all characters other than hyphens, letters and digits. | `string` | `null` | no |
 | <a name="input_region"></a> [region](#input\_region) | AWS Region | `string` | n/a | yes |
 | <a name="input_root_account_stage"></a> [root\_account\_stage](#input\_root\_account\_stage) | The stage name for the Organization root (management) account. This is used to lookup account IDs from account names<br/>using the `account-map` component. | `string` | `"root"` | no |
@@ -244,6 +287,7 @@ atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 | Name | Description |
 |------|-------------|
 | <a name="output_delegated_administrator_account_id"></a> [delegated\_administrator\_account\_id](#output\_delegated\_administrator\_account\_id) | The AWS Account ID of the AWS Organization delegated administrator account |
+| <a name="output_product_subscriptions"></a> [product\_subscriptions](#output\_product\_subscriptions) | ARNs of Security Hub product subscriptions for AWS service integrations |
 | <a name="output_sns_topic_name"></a> [sns\_topic\_name](#output\_sns\_topic\_name) | The name of the SNS topic created by the component |
 | <a name="output_sns_topic_subscriptions"></a> [sns\_topic\_subscriptions](#output\_sns\_topic\_subscriptions) | The SNS topic subscriptions created by the component |
 <!-- markdownlint-restore -->
@@ -253,9 +297,19 @@ atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
 ## References
 
 
-- [AWS Security Hub Documentation](https://aws.amazon.com/security-hub/) - 
+- [AWS Security Hub Documentation](https://docs.aws.amazon.com/securityhub/) - Official AWS documentation for Security Hub
 
-- [Cloud Posse's upstream component](https://github.com/cloudposse/terraform-aws-components/tree/main/modules/security-hub) - 
+- [Security Hub Organization Administration](https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-accounts-orgs.html) - Managing Security Hub across AWS Organizations
+
+- [Security Hub Product Integrations](https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-findings-providers.html) - Integrating AWS services with Security Hub via product subscriptions
+
+- [Security Hub Standards](https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards.html) - Security standards and compliance frameworks in Security Hub
+
+- [Security Hub Finding Aggregation](https://docs.aws.amazon.com/securityhub/latest/userguide/finding-aggregation.html) - Cross-region finding aggregation configuration
+
+- [CloudPosse Security Hub Terraform Module](https://github.com/cloudposse/terraform-aws-security-hub) - The underlying Terraform module used by this component
+
+- [Cloud Posse's upstream component](https://github.com/cloudposse/terraform-aws-components/tree/main/modules/security-hub) - Original component in terraform-aws-components
 
 
 

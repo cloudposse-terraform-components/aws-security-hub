@@ -12,3 +12,11 @@ output "sns_topic_subscriptions" {
   value       = local.create_securityhub ? try(module.security_hub[0].sns_topic_subscriptions, null) : null
   description = "The SNS topic subscriptions created by the component"
 }
+
+output "product_subscriptions" {
+  value = local.create_securityhub ? {
+    for key, service in local.enabled_product_subscriptions :
+    key => aws_securityhub_product_subscription.this[key].arn
+  } : null
+  description = "ARNs of Security Hub product subscriptions for AWS service integrations"
+}
