@@ -114,17 +114,15 @@ First, the component is deployed to the
 region to configure the Security Hub instance to which each account will send its findings.
 
 ```yaml
-# core-ue1-security
+# core-use1-security
 components:
   terraform:
-    security-hub/delegated-administrator/ue1:
+    aws-security-hub/delegated-administrator:
       metadata:
-        component: security-hub
+        component: aws-security-hub
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
-        environment: ue1
-        region: us-east-1
         # Product subscriptions for AWS security service integrations
         product_subscriptions:
           guardduty: true        # Enable GuardDuty findings
@@ -136,9 +134,9 @@ components:
 ```
 
 ```bash
-atmos terraform apply security-hub/delegated-administrator/ue1 -s core-ue1-security
-atmos terraform apply security-hub/delegated-administrator/ue2 -s core-ue2-security
-atmos terraform apply security-hub/delegated-administrator/uw1 -s core-uw1-security
+atmos terraform apply aws-security-hub/delegated-administrator -s core-use1-security
+atmos terraform apply aws-security-hub/delegated-administrator -s core-use2-security
+atmos terraform apply aws-security-hub/delegated-administrator -s core-usw1-security
 # ... other regions
 ```
 
@@ -154,27 +152,22 @@ are using the `SuperAdmin` user, it will already have access to the state bucket
 backend config to null and set `var.privileged` to `true`.
 
 ```yaml
-# core-ue1-root
+# core-use1-root
 components:
   terraform:
-    security-hub/root/ue1:
+    aws-security-hub/root:
       metadata:
-        component: security-hub
-      backend:
-        s3:
-          role_arn: null
+        component: aws-security-hub
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
-        environment: ue1
-        region: us-east-1
         privileged: true
 ```
 
 ```bash
-atmos terraform apply security-hub/root/ue1 -s core-ue1-root
-atmos terraform apply security-hub/root/ue2 -s core-ue2-root
-atmos terraform apply security-hub/root/uw1 -s core-uw1-root
+atmos terraform apply aws-security-hub/root -s core-use1-root
+atmos terraform apply aws-security-hub/root -s core-use2-root
+atmos terraform apply aws-security-hub/root -s core-usw1-root
 # ... other regions
 ```
 
@@ -187,24 +180,22 @@ configuration mode where each account manages its own configuration, and auto-en
 accounts.
 
 ```yaml
-# core-ue1-security
+# core-use1-security
 components:
   terraform:
-    security-hub/org-settings/ue1:
+    aws-security-hub/org-settings:
       metadata:
-        component: security-hub
+        component: aws-security-hub
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
-        environment: ue1
-        region: us-east-1
         admin_delegated: true
 ```
 
 ```bash
-atmos terraform apply security-hub/org-settings/ue1 -s core-ue1-security
-atmos terraform apply security-hub/org-settings/ue2 -s core-ue2-security
-atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
+atmos terraform apply aws-security-hub/org-settings -s core-use1-security
+atmos terraform apply aws-security-hub/org-settings -s core-use2-security
+atmos terraform apply aws-security-hub/org-settings -s core-usw1-security
 # ... other regions
 ```
 
@@ -231,7 +222,7 @@ After deployment, verify product subscriptions:
 
 ```bash
 # Via Terraform output
-atmos terraform output aws-security-hub/delegated-administrator/ue1 -s core-ue1-security
+atmos terraform output aws-security-hub/delegated-administrator -s core-use1-security
 
 # Via AWS CLI
 aws securityhub list-enabled-products-for-import --region us-east-1
@@ -266,7 +257,7 @@ If the delegated administrator sees this error in the Security Hub console:
 This means the Organizations resource-based delegation policy is missing or incomplete. Re-apply Step 2:
 
 ```bash
-atmos terraform apply security-hub/root/ue1 -s core-ue1-root
+atmos terraform apply aws-security-hub/root -s core-use1-root
 ```
 
 ## Account Map Configuration
