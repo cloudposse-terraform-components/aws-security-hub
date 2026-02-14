@@ -231,10 +231,86 @@ After deployment, verify product subscriptions:
 
 ```bash
 # Via Terraform output
-atmos terraform output security-hub/delegated-administrator/ue1 -s core-ue1-security
+atmos terraform output aws-security-hub/delegated-administrator/ue1 -s core-ue1-security
 
 # Via AWS CLI
 aws securityhub list-enabled-products-for-import --region us-east-1
+```
+
+## Delegation Policy
+
+Step 2 (root account deployment) creates an
+[Organizations resource-based delegation policy](https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-v2-policy-statement.html)
+with 8 policy statements that grant the delegated administrator account permissions to manage Security Hub policies via
+Organizations APIs. This policy is required even when using LOCAL configuration mode, because the Security Hub console
+checks for it when displaying central configuration management options.
+
+**Key details:**
+
+- The policy uses **`organizations:*` actions** (not `securityhub:*`). Organizations resource policies only support
+  `organizations:*` actions.
+- AWS expects exactly **8 policy statements**, including `SecurityServicesDelegating*` statements with resource ARNs
+  scoped to the organization ID.
+- The policy includes resources for both `securityhub_policy` and `inspector_policy` types (shared delegation mechanism).
+- `aws_organizations_resource_policy` is an **organization-wide singleton**. Only one can exist per organization. If
+  other services need delegation policies, their statements must be combined into a single policy.
+- Set `organizations_resource_policy_enabled = false` if the Organizations resource policy is managed by another
+  component or service.
+
+### Troubleshooting: "Missing Permissions to Manage Policies"
+
+If the delegated administrator sees this error in the Security Hub console:
+
+> You are missing permissions that are required to manage policies in Security Hub.
+
+This means the Organizations resource-based delegation policy is missing or incomplete. Re-apply Step 2:
+
+```bash
+atmos terraform apply security-hub/root/ue1 -s core-ue1-root
+```
+
+## Account Map Configuration
+
+The component supports two modes for resolving AWS account IDs:
+
+### Remote State Mode (default)
+
+When `account_map_enabled = true` (default), the component fetches account mappings from the `account-map` component
+via Terraform remote state. This is the standard Cloud Posse reference architecture pattern.
+
+### Static Mode
+
+When `account_map_enabled = false`, the component uses a static `account_map` variable instead of remote state. This is
+useful when not using the `account-map` component or when account mappings are managed externally (e.g., by Atmos).
+
+```yaml
+vars:
+  account_map_enabled: false
+  account_map:
+    full_account_map:
+      core-root: "111111111111"
+      core-security: "222222222222"
+      core-audit: "333333333333"
+      plat-dev: "444444444444"
+      plat-prod: "555555555555"
+    root_account_account_name: "core-root"
+```
+
+When using static mode, provider authentication is handled externally (e.g., by Atmos identity resolution) rather than
+through the `iam-roles` module.
+
+## Account Verification
+
+When `account_verification_enabled = true` (default), the component verifies that Terraform is executing in the correct
+AWS account by comparing the current account ID against the expected account ID from the account map, based on the
+component's `tenant-stage` context. This provides a safety check to catch misconfigurations before any resources are
+created or modified.
+
+To disable account verification:
+
+```yaml
+vars:
+  account_verification_enabled: false
 ```
 
 <!-- prettier-ignore-start -->
