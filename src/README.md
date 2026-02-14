@@ -5,7 +5,7 @@ tags:
   - provider/aws
 ---
 
-# Component: `security-hub`
+# Component: `aws-security-hub`
 
 This component is responsible for configuring Security Hub within an AWS Organization.
 
@@ -191,7 +191,7 @@ After deployment, verify product subscriptions:
 
 ```bash
 # Via Terraform output
-atmos terraform output security-hub/delegated-administrator/ue1 -s core-ue1-security
+atmos terraform output aws-security-hub/delegated-administrator/ue1 -s core-ue1-security
 
 # Via AWS CLI
 aws securityhub list-enabled-products-for-import --region us-east-1
