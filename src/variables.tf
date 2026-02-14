@@ -179,6 +179,21 @@ variable "global_environment" {
   description = "Global environment name"
 }
 
+variable "organizations_resource_policy_enabled" {
+  type        = bool
+  description = <<-DOC
+  Enable creation of the Organizations resource-based delegation policy for Security Hub. When true (default),
+  the component creates an `aws_organizations_resource_policy` in the management account (Step 2) that grants the
+  delegated administrator permissions to manage Security Hub policies via Organizations APIs.
+
+  Set to `false` if the Organizations resource policy is managed elsewhere (e.g., by another component or service).
+  Note: `aws_organizations_resource_policy` is an organization-wide singleton — only one can exist per organization.
+  If other services (e.g., AWS Backup, Inspector) need delegation policies, their statements must be combined into
+  a single policy managed by one component.
+  DOC
+  default     = true
+}
+
 variable "organization_management_account_name" {
   type        = string
   default     = null
