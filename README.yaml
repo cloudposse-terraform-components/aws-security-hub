@@ -46,7 +46,7 @@ description: |-
   - **SNS Notifications**: Optional SNS topic creation for security finding alerts
   - **Compliance Standards**: Configurable security standards (CIS, PCI DSS, AWS Foundational Security Best Practices)
   - **Account Verification**: Optional safety check that validates Terraform is running in the correct AWS account
-  - **Flexible Account Map**: Supports both remote-state account-map lookups (default) and static account map variables
+  - **Flexible Account Map**: Supports both remote-state account-map lookups and static account map variables (default)
 
 usage: |-
   **Stack Level**: Regional
@@ -220,15 +220,15 @@ usage: |-
 
   The component supports two modes for resolving AWS account IDs:
 
-  ### Remote State Mode (default)
+  ### Static Mode (default)
 
-  When `account_map_enabled = true` (default), the component fetches account mappings from the `account-map` component
-  via Terraform remote state. This is the standard Cloud Posse reference architecture pattern.
-
-  ### Static Mode
-
-  When `account_map_enabled = false`, the component uses a static `account_map` variable instead of remote state. This is
+  When `account_map_enabled = false` (default), the component uses a static `account_map` variable instead of remote state. This is
   useful when not using the `account-map` component or when account mappings are managed externally (e.g., by Atmos).
+
+  ### Remote State Mode
+
+  When `account_map_enabled = true`, the component fetches account mappings from the `account-map` component
+  via Terraform remote state. This is the standard Cloud Posse reference architecture pattern.
 
   ```yaml
   vars:
