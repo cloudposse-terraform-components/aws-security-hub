@@ -83,7 +83,7 @@ usage: |-
           product_subscriptions:
             guardduty: true        # Enable GuardDuty findings
             inspector: true        # Enable Inspector findings
-            macie: true            # Enable Macie findings
+            macie: false           # Disabled by default - enable if using Macie
             config: true           # Enable Config findings
             access_analyzer: true  # Enable Access Analyzer findings
             firewall_manager: false # Disabled by default
@@ -164,7 +164,7 @@ usage: |-
   |------------------|---------|--------------------------------------|
   | GuardDuty        | `true`  | Threat detection findings            |
   | Inspector        | `true`  | Vulnerability scanning findings      |
-  | Macie            | `true`  | Sensitive data discovery findings    |
+  | Macie            | `false` | Sensitive data discovery findings    |
   | Config           | `true`  | Configuration compliance findings    |
   | Access Analyzer  | `true`  | External access findings             |
   | Firewall Manager | `false` | Firewall policy compliance findings  |

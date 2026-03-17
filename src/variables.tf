@@ -123,7 +123,7 @@ variable "enabled_standards" {
 variable "finding_aggregation_region" {
   description = "If finding aggregation is enabled, the region that collects findings"
   type        = string
-  default     = null
+  default     = "us-east-1"
 }
 
 variable "finding_aggregator_enabled" {
@@ -137,7 +137,7 @@ variable "finding_aggregator_enabled" {
   DOC
 
   type    = bool
-  default = false
+  default = true
 }
 
 variable "finding_aggregator_linking_mode" {
@@ -252,7 +252,7 @@ variable "product_subscriptions" {
   type = object({
     guardduty        = optional(bool, true)
     inspector        = optional(bool, true)
-    macie            = optional(bool, true)
+    macie            = optional(bool, false)
     config           = optional(bool, true)
     access_analyzer  = optional(bool, true)
     firewall_manager = optional(bool, false)
@@ -264,7 +264,7 @@ variable "product_subscriptions" {
   Default values:
   - guardduty: true (enable GuardDuty findings integration)
   - inspector: true (enable Inspector findings integration)
-  - macie: true (enable Macie findings integration)
+  - macie: false (disabled by default - enable if using Macie)
   - config: true (enable Config findings integration)
   - access_analyzer: true (enable Access Analyzer findings integration)
   - firewall_manager: false (disabled by default - enable if using Firewall Manager)
