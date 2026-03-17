@@ -1,3 +1,45 @@
+variable "account_verification_enabled" {
+  type        = bool
+  description = <<-DOC
+  Enable account verification. When true (default), the component verifies that Terraform is executing
+  in the correct AWS account by comparing the current account ID against the expected account from the
+  account_map based on the component's tenant-stage context.
+  DOC
+  default     = true
+}
+
+variable "account_map_enabled" {
+  type        = bool
+  description = <<-DOC
+  Enable the account map component. When true, the component fetches account mappings from the
+  `account-map` component via remote state. When false (default), the component uses the static `account_map` variable instead.
+  DOC
+  default     = false
+}
+
+variable "account_map" {
+  type = object({
+    full_account_map              = map(string)
+    audit_account_account_name    = optional(string, "")
+    root_account_account_name     = optional(string, "")
+    identity_account_account_name = optional(string, "")
+    aws_partition                 = optional(string, "aws")
+    iam_role_arn_templates        = optional(map(string), {})
+  })
+  description = <<-DOC
+  Static account map configuration. Only used when `account_map_enabled` is `false`.
+  Map keys use `tenant-stage` format (e.g., `core-security`, `core-audit`, `plat-prod`).
+  DOC
+  default = {
+    full_account_map              = {}
+    audit_account_account_name    = ""
+    root_account_account_name     = ""
+    identity_account_account_name = ""
+    aws_partition                 = "aws"
+    iam_role_arn_templates        = {}
+  }
+}
+
 variable "account_map_tenant" {
   type        = string
   default     = "core"
@@ -81,7 +123,7 @@ variable "enabled_standards" {
 variable "finding_aggregation_region" {
   description = "If finding aggregation is enabled, the region that collects findings"
   type        = string
-  default     = null
+  default     = "us-east-1"
 }
 
 variable "finding_aggregator_enabled" {
@@ -95,7 +137,7 @@ variable "finding_aggregator_enabled" {
   DOC
 
   type    = bool
-  default = false
+  default = true
 }
 
 variable "finding_aggregator_linking_mode" {
@@ -135,6 +177,21 @@ variable "global_environment" {
   type        = string
   default     = "gbl"
   description = "Global environment name"
+}
+
+variable "organizations_resource_policy_enabled" {
+  type        = bool
+  description = <<-DOC
+  Enable creation of the Organizations resource-based delegation policy for Security Hub. When true (default),
+  the component creates an `aws_organizations_resource_policy` in the management account (Step 2) that grants the
+  delegated administrator permissions to manage Security Hub policies via Organizations APIs.
+
+  Set to `false` if the Organizations resource policy is managed elsewhere (e.g., by another component or service).
+  Note: `aws_organizations_resource_policy` is an organization-wide singleton — only one can exist per organization.
+  If other services (e.g., AWS Backup, Inspector) need delegation policies, their statements must be combined into
+  a single policy managed by one component.
+  DOC
+  default     = true
 }
 
 variable "organization_management_account_name" {
@@ -195,7 +252,7 @@ variable "product_subscriptions" {
   type = object({
     guardduty        = optional(bool, true)
     inspector        = optional(bool, true)
-    macie            = optional(bool, true)
+    macie            = optional(bool, false)
     config           = optional(bool, true)
     access_analyzer  = optional(bool, true)
     firewall_manager = optional(bool, false)
@@ -207,7 +264,7 @@ variable "product_subscriptions" {
   Default values:
   - guardduty: true (enable GuardDuty findings integration)
   - inspector: true (enable Inspector findings integration)
-  - macie: true (enable Macie findings integration)
+  - macie: false (disabled by default - enable if using Macie)
   - config: true (enable Config findings integration)
   - access_analyzer: true (enable Access Analyzer findings integration)
   - firewall_manager: false (disabled by default - enable if using Firewall Manager)

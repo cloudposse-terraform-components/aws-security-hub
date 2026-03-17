@@ -39,10 +39,14 @@ description: |-
   ## Component Features
 
   - **Delegated Administrator Model**: Uses AWS Organizations delegated administrator pattern for centralized management
+  - **Organizations Delegation Policy**: Automatically creates the 8-statement Organizations resource-based delegation
+    policy required for Security Hub console access in the delegated administrator account
   - **Multi-Region Deployment**: Supports deployment across all AWS regions with finding aggregation
   - **Product Subscriptions**: Automatically creates subscriptions for AWS security service integrations
   - **SNS Notifications**: Optional SNS topic creation for security finding alerts
   - **Compliance Standards**: Configurable security standards (CIS, PCI DSS, AWS Foundational Security Best Practices)
+  - **Account Verification**: Optional safety check that validates Terraform is running in the correct AWS account
+  - **Flexible Account Map**: Supports both remote-state account-map lookups and static account map variables (default)
 
 usage: |-
   **Stack Level**: Regional
@@ -66,65 +70,60 @@ usage: |-
   region to configure the Security Hub instance to which each account will send its findings.
 
   ```yaml
-  # core-ue1-security
+  # core-use1-security
   components:
     terraform:
-      security-hub/delegated-administrator/ue1:
+      aws-security-hub/delegated-administrator:
         metadata:
-          component: security-hub
+          component: aws-security-hub
         vars:
           enabled: true
           delegated_administrator_account_name: core-security
-          environment: ue1
-          region: us-east-1
           # Product subscriptions for AWS security service integrations
           product_subscriptions:
             guardduty: true        # Enable GuardDuty findings
             inspector: true        # Enable Inspector findings
-            macie: true            # Enable Macie findings
+            macie: false           # Disabled by default - enable if using Macie
             config: true           # Enable Config findings
             access_analyzer: true  # Enable Access Analyzer findings
             firewall_manager: false # Disabled by default
   ```
 
   ```bash
-  atmos terraform apply security-hub/delegated-administrator/ue1 -s core-ue1-security
-  atmos terraform apply security-hub/delegated-administrator/ue2 -s core-ue2-security
-  atmos terraform apply security-hub/delegated-administrator/uw1 -s core-uw1-security
+  atmos terraform apply aws-security-hub/delegated-administrator -s core-use1-security
+  atmos terraform apply aws-security-hub/delegated-administrator -s core-use2-security
+  atmos terraform apply aws-security-hub/delegated-administrator -s core-usw1-security
   # ... other regions
   ```
 
   ### Deploy to Organization Management (root) Account
 
   Next, the component is deployed to the AWS Organization Management (a/k/a `root`) Account in order to set the AWS
-  Organization Designated Administrator account.
+  Organization Designated Administrator account. This step also creates the
+  [Organizations resource-based delegation policy](https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-v2-policy-statement.html)
+  that grants the delegated administrator permissions to manage Security Hub policies via Organizations APIs.
 
   Note that `SuperAdmin` permissions must be used as we are deploying to the AWS Organization Management account. Since we
   are using the `SuperAdmin` user, it will already have access to the state bucket, so we set the `role_arn` of the
   backend config to null and set `var.privileged` to `true`.
 
   ```yaml
-  # core-ue1-root
+  # core-use1-root
   components:
     terraform:
-      security-hub/root/ue1:
+      aws-security-hub/root:
         metadata:
-          component: security-hub
-        backend:
-          s3:
-            role_arn: null
+          component: aws-security-hub
         vars:
           enabled: true
           delegated_administrator_account_name: core-security
-          environment: ue1
-          region: us-east-1
           privileged: true
   ```
 
   ```bash
-  atmos terraform apply security-hub/root/ue1 -s core-ue1-root
-  atmos terraform apply security-hub/root/ue2 -s core-ue2-root
-  atmos terraform apply security-hub/root/uw1 -s core-uw1-root
+  atmos terraform apply aws-security-hub/root -s core-use1-root
+  atmos terraform apply aws-security-hub/root -s core-use2-root
+  atmos terraform apply aws-security-hub/root -s core-usw1-root
   # ... other regions
   ```
 
@@ -132,27 +131,27 @@ usage: |-
 
   Finally, the component is deployed to the Delegated Administrator Account again in order to create the organization-wide
   Security Hub configuration for the AWS Organization, but with `var.admin_delegated` set to `true` this time to indicate
-  that the delegation from the Organization Management account has already been performed.
+  that the delegation from the Organization Management account has already been performed. This step uses LOCAL
+  configuration mode where each account manages its own configuration, and auto-enables Security Hub for all member
+  accounts.
 
   ```yaml
-  # core-ue1-security
+  # core-use1-security
   components:
     terraform:
-      security-hub/org-settings/ue1:
+      aws-security-hub/org-settings:
         metadata:
-          component: security-hub
+          component: aws-security-hub
         vars:
           enabled: true
           delegated_administrator_account_name: core-security
-          environment: ue1
-          region: us-east-1
           admin_delegated: true
   ```
 
   ```bash
-  atmos terraform apply security-hub/org-settings/ue1 -s core-ue1-security
-  atmos terraform apply security-hub/org-settings/ue2 -s core-ue2-security
-  atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
+  atmos terraform apply aws-security-hub/org-settings -s core-use1-security
+  atmos terraform apply aws-security-hub/org-settings -s core-use2-security
+  atmos terraform apply aws-security-hub/org-settings -s core-usw1-security
   # ... other regions
   ```
 
@@ -165,7 +164,7 @@ usage: |-
   |------------------|---------|--------------------------------------|
   | GuardDuty        | `true`  | Threat detection findings            |
   | Inspector        | `true`  | Vulnerability scanning findings      |
-  | Macie            | `true`  | Sensitive data discovery findings    |
+  | Macie            | `false` | Sensitive data discovery findings    |
   | Config           | `true`  | Configuration compliance findings    |
   | Access Analyzer  | `true`  | External access findings             |
   | Firewall Manager | `false` | Firewall policy compliance findings  |
@@ -179,10 +178,86 @@ usage: |-
 
   ```bash
   # Via Terraform output
-  atmos terraform output security-hub/delegated-administrator/ue1 -s core-ue1-security
+  atmos terraform output aws-security-hub/delegated-administrator -s core-use1-security
 
   # Via AWS CLI
   aws securityhub list-enabled-products-for-import --region us-east-1
+  ```
+
+  ## Delegation Policy
+
+  Step 2 (root account deployment) creates an
+  [Organizations resource-based delegation policy](https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-v2-policy-statement.html)
+  with 8 policy statements that grant the delegated administrator account permissions to manage Security Hub policies via
+  Organizations APIs. This policy is required even when using LOCAL configuration mode, because the Security Hub console
+  checks for it when displaying central configuration management options.
+
+  **Key details:**
+
+  - The policy uses **`organizations:*` actions** (not `securityhub:*`). Organizations resource policies only support
+    `organizations:*` actions.
+  - AWS expects exactly **8 policy statements**, including `SecurityServicesDelegating*` statements with resource ARNs
+    scoped to the organization ID.
+  - The policy includes resources for both `securityhub_policy` and `inspector_policy` types (shared delegation mechanism).
+  - `aws_organizations_resource_policy` is an **organization-wide singleton**. Only one can exist per organization. If
+    other services need delegation policies, their statements must be combined into a single policy.
+  - Set `organizations_resource_policy_enabled = false` if the Organizations resource policy is managed by another
+    component or service.
+
+  ### Troubleshooting: "Missing Permissions to Manage Policies"
+
+  If the delegated administrator sees this error in the Security Hub console:
+
+  > You are missing permissions that are required to manage policies in Security Hub.
+
+  This means the Organizations resource-based delegation policy is missing or incomplete. Re-apply Step 2:
+
+  ```bash
+  atmos terraform apply aws-security-hub/root -s core-use1-root
+  ```
+
+  ## Account Map Configuration
+
+  The component supports two modes for resolving AWS account IDs:
+
+  ### Static Mode (default)
+
+  When `account_map_enabled = false` (default), the component uses a static `account_map` variable instead of remote state. This is
+  useful when not using the `account-map` component or when account mappings are managed externally (e.g., by Atmos).
+
+  ### Remote State Mode
+
+  When `account_map_enabled = true`, the component fetches account mappings from the `account-map` component
+  via Terraform remote state. This is the standard Cloud Posse reference architecture pattern.
+
+  ```yaml
+  vars:
+    account_map_enabled: false
+    account_map:
+      full_account_map:
+        core-root: "111111111111"
+        core-security: "222222222222"
+        core-audit: "333333333333"
+        plat-dev: "444444444444"
+        plat-prod: "555555555555"
+      root_account_account_name: "core-root"
+  ```
+
+  When using static mode, provider authentication is handled externally (e.g., by Atmos identity resolution) rather than
+  through the `iam-roles` module.
+
+  ## Account Verification
+
+  When `account_verification_enabled = true` (default), the component verifies that Terraform is executing in the correct
+  AWS account by comparing the current account ID against the expected account ID from the account map, based on the
+  component's `tenant-stage` context. This provides a safety check to catch misconfigurations before any resources are
+  created or modified.
+
+  To disable account verification:
+
+  ```yaml
+  vars:
+    account_verification_enabled: false
   ```
 
   <!-- prettier-ignore-start -->
@@ -210,12 +285,12 @@ references:
     description: Original component in terraform-aws-components
     url: https://github.com/cloudposse/terraform-aws-components/tree/main/modules/security-hub
 tags:
-  - component/security-hub
+  - component/aws-security-hub
   - layer/security-and-compliance
   - provider/aws
 # Categories of this project
 categories:
-  - component/security-hub
+  - component/aws-security-hub
   - layer/security-and-compliance
   - provider/aws
 # License of this project

@@ -1,6 +1,6 @@
 ---
 tags:
-  - component/security-hub
+  - component/aws-security-hub
   - layer/security-and-compliance
   - provider/aws
 ---
@@ -43,10 +43,14 @@ integrated partner solutions.
 ## Component Features
 
 - **Delegated Administrator Model**: Uses AWS Organizations delegated administrator pattern for centralized management
+- **Organizations Delegation Policy**: Automatically creates the 8-statement Organizations resource-based delegation
+  policy required for Security Hub console access in the delegated administrator account
 - **Multi-Region Deployment**: Supports deployment across all AWS regions with finding aggregation
 - **Product Subscriptions**: Automatically creates subscriptions for AWS security service integrations
 - **SNS Notifications**: Optional SNS topic creation for security finding alerts
 - **Compliance Standards**: Configurable security standards (CIS, PCI DSS, AWS Foundational Security Best Practices)
+- **Account Verification**: Optional safety check that validates Terraform is running in the correct AWS account
+- **Flexible Account Map**: Supports both remote-state account-map lookups and static account map variables (default)
 ## Usage
 
 **Stack Level**: Regional
@@ -70,65 +74,60 @@ First, the component is deployed to the
 region to configure the Security Hub instance to which each account will send its findings.
 
 ```yaml
-# core-ue1-security
+# core-use1-security
 components:
   terraform:
-    security-hub/delegated-administrator/ue1:
+    aws-security-hub/delegated-administrator:
       metadata:
-        component: security-hub
+        component: aws-security-hub
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
-        environment: ue1
-        region: us-east-1
         # Product subscriptions for AWS security service integrations
         product_subscriptions:
           guardduty: true        # Enable GuardDuty findings
           inspector: true        # Enable Inspector findings
-          macie: true            # Enable Macie findings
+          macie: false           # Disabled by default - enable if using Macie
           config: true           # Enable Config findings
           access_analyzer: true  # Enable Access Analyzer findings
           firewall_manager: false # Disabled by default
 ```
 
 ```bash
-atmos terraform apply security-hub/delegated-administrator/ue1 -s core-ue1-security
-atmos terraform apply security-hub/delegated-administrator/ue2 -s core-ue2-security
-atmos terraform apply security-hub/delegated-administrator/uw1 -s core-uw1-security
+atmos terraform apply aws-security-hub/delegated-administrator -s core-use1-security
+atmos terraform apply aws-security-hub/delegated-administrator -s core-use2-security
+atmos terraform apply aws-security-hub/delegated-administrator -s core-usw1-security
 # ... other regions
 ```
 
 ### Deploy to Organization Management (root) Account
 
 Next, the component is deployed to the AWS Organization Management (a/k/a `root`) Account in order to set the AWS
-Organization Designated Administrator account.
+Organization Designated Administrator account. This step also creates the
+[Organizations resource-based delegation policy](https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-v2-policy-statement.html)
+that grants the delegated administrator permissions to manage Security Hub policies via Organizations APIs.
 
 Note that `SuperAdmin` permissions must be used as we are deploying to the AWS Organization Management account. Since we
 are using the `SuperAdmin` user, it will already have access to the state bucket, so we set the `role_arn` of the
 backend config to null and set `var.privileged` to `true`.
 
 ```yaml
-# core-ue1-root
+# core-use1-root
 components:
   terraform:
-    security-hub/root/ue1:
+    aws-security-hub/root:
       metadata:
-        component: security-hub
-      backend:
-        s3:
-          role_arn: null
+        component: aws-security-hub
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
-        environment: ue1
-        region: us-east-1
         privileged: true
 ```
 
 ```bash
-atmos terraform apply security-hub/root/ue1 -s core-ue1-root
-atmos terraform apply security-hub/root/ue2 -s core-ue2-root
-atmos terraform apply security-hub/root/uw1 -s core-uw1-root
+atmos terraform apply aws-security-hub/root -s core-use1-root
+atmos terraform apply aws-security-hub/root -s core-use2-root
+atmos terraform apply aws-security-hub/root -s core-usw1-root
 # ... other regions
 ```
 
@@ -136,27 +135,27 @@ atmos terraform apply security-hub/root/uw1 -s core-uw1-root
 
 Finally, the component is deployed to the Delegated Administrator Account again in order to create the organization-wide
 Security Hub configuration for the AWS Organization, but with `var.admin_delegated` set to `true` this time to indicate
-that the delegation from the Organization Management account has already been performed.
+that the delegation from the Organization Management account has already been performed. This step uses LOCAL
+configuration mode where each account manages its own configuration, and auto-enables Security Hub for all member
+accounts.
 
 ```yaml
-# core-ue1-security
+# core-use1-security
 components:
   terraform:
-    security-hub/org-settings/ue1:
+    aws-security-hub/org-settings:
       metadata:
-        component: security-hub
+        component: aws-security-hub
       vars:
         enabled: true
         delegated_administrator_account_name: core-security
-        environment: ue1
-        region: us-east-1
         admin_delegated: true
 ```
 
 ```bash
-atmos terraform apply security-hub/org-settings/ue1 -s core-ue1-security
-atmos terraform apply security-hub/org-settings/ue2 -s core-ue2-security
-atmos terraform apply security-hub/org-settings/uw1 -s core-uw1-security
+atmos terraform apply aws-security-hub/org-settings -s core-use1-security
+atmos terraform apply aws-security-hub/org-settings -s core-use2-security
+atmos terraform apply aws-security-hub/org-settings -s core-usw1-security
 # ... other regions
 ```
 
@@ -169,7 +168,7 @@ supports automatic integration with:
 |------------------|---------|--------------------------------------|
 | GuardDuty        | `true`  | Threat detection findings            |
 | Inspector        | `true`  | Vulnerability scanning findings      |
-| Macie            | `true`  | Sensitive data discovery findings    |
+| Macie            | `false` | Sensitive data discovery findings    |
 | Config           | `true`  | Configuration compliance findings    |
 | Access Analyzer  | `true`  | External access findings             |
 | Firewall Manager | `false` | Firewall policy compliance findings  |
@@ -183,10 +182,86 @@ After deployment, verify product subscriptions:
 
 ```bash
 # Via Terraform output
-atmos terraform output security-hub/delegated-administrator/ue1 -s core-ue1-security
+atmos terraform output aws-security-hub/delegated-administrator -s core-use1-security
 
 # Via AWS CLI
 aws securityhub list-enabled-products-for-import --region us-east-1
+```
+
+## Delegation Policy
+
+Step 2 (root account deployment) creates an
+[Organizations resource-based delegation policy](https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-v2-policy-statement.html)
+with 8 policy statements that grant the delegated administrator account permissions to manage Security Hub policies via
+Organizations APIs. This policy is required even when using LOCAL configuration mode, because the Security Hub console
+checks for it when displaying central configuration management options.
+
+**Key details:**
+
+- The policy uses **`organizations:*` actions** (not `securityhub:*`). Organizations resource policies only support
+  `organizations:*` actions.
+- AWS expects exactly **8 policy statements**, including `SecurityServicesDelegating*` statements with resource ARNs
+  scoped to the organization ID.
+- The policy includes resources for both `securityhub_policy` and `inspector_policy` types (shared delegation mechanism).
+- `aws_organizations_resource_policy` is an **organization-wide singleton**. Only one can exist per organization. If
+  other services need delegation policies, their statements must be combined into a single policy.
+- Set `organizations_resource_policy_enabled = false` if the Organizations resource policy is managed by another
+  component or service.
+
+### Troubleshooting: "Missing Permissions to Manage Policies"
+
+If the delegated administrator sees this error in the Security Hub console:
+
+> You are missing permissions that are required to manage policies in Security Hub.
+
+This means the Organizations resource-based delegation policy is missing or incomplete. Re-apply Step 2:
+
+```bash
+atmos terraform apply aws-security-hub/root -s core-use1-root
+```
+
+## Account Map Configuration
+
+The component supports two modes for resolving AWS account IDs:
+
+### Static Mode (default)
+
+When `account_map_enabled = false` (default), the component uses a static `account_map` variable instead of remote state. This is
+useful when not using the `account-map` component or when account mappings are managed externally (e.g., by Atmos).
+
+### Remote State Mode
+
+When `account_map_enabled = true`, the component fetches account mappings from the `account-map` component
+via Terraform remote state. This is the standard Cloud Posse reference architecture pattern.
+
+```yaml
+vars:
+  account_map_enabled: false
+  account_map:
+    full_account_map:
+      core-root: "111111111111"
+      core-security: "222222222222"
+      core-audit: "333333333333"
+      plat-dev: "444444444444"
+      plat-prod: "555555555555"
+    root_account_account_name: "core-root"
+```
+
+When using static mode, provider authentication is handled externally (e.g., by Atmos identity resolution) rather than
+through the `iam-roles` module.
+
+## Account Verification
+
+When `account_verification_enabled = true` (default), the component verifies that Terraform is executing in the correct
+AWS account by comparing the current account ID against the expected account ID from the account map, based on the
+component's `tenant-stage` context. This provides a safety check to catch misconfigurations before any resources are
+created or modified.
+
+To disable account verification:
+
+```yaml
+vars:
+  account_verification_enabled: false
 ```
 
 <!-- prettier-ignore-start -->
@@ -199,22 +274,22 @@ aws securityhub list-enabled-products-for-import --region us-east-1
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0.0 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 5.0, < 6.0.0 |
-| <a name="requirement_awsutils"></a> [awsutils](#requirement\_awsutils) | >= 0.16.0, < 6.0.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 5.33.0 |
+| <a name="requirement_awsutils"></a> [awsutils](#requirement\_awsutils) | >= 0.16.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 5.0, < 6.0.0 |
-| <a name="provider_awsutils"></a> [awsutils](#provider\_awsutils) | >= 0.16.0, < 6.0.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 5.33.0 |
+| <a name="provider_awsutils"></a> [awsutils](#provider\_awsutils) | >= 0.16.0 |
+| <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 
 ## Modules
 
 | Name | Source | Version |
 |------|--------|---------|
 | <a name="module_account_map"></a> [account\_map](#module\_account\_map) | cloudposse/stack-config/yaml//modules/remote-state | 1.8.0 |
-| <a name="module_iam_roles"></a> [iam\_roles](#module\_iam\_roles) | ../account-map/modules/iam-roles | n/a |
 | <a name="module_security_hub"></a> [security\_hub](#module\_security\_hub) | cloudposse/security-hub/aws | 0.12.2 |
 | <a name="module_this"></a> [this](#module\_this) | cloudposse/label/null | 0.25.0 |
 
@@ -222,12 +297,15 @@ aws securityhub list-enabled-products-for-import --region us-east-1
 
 | Name | Type |
 |------|------|
+| [aws_organizations_resource_policy.security_hub](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_resource_policy) | resource |
 | [aws_securityhub_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_account) | resource |
 | [aws_securityhub_organization_admin_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_organization_admin_account) | resource |
 | [aws_securityhub_organization_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_organization_configuration) | resource |
 | [aws_securityhub_product_subscription.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
 | [awsutils_security_hub_organization_settings.this](https://registry.terraform.io/providers/cloudposse/awsutils/latest/docs/resources/security_hub_organization_settings) | resource |
+| [terraform_data.account_verification](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [aws_caller_identity.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
+| [aws_organizations_organization.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/organizations_organization) | data source |
 | [aws_partition.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
 | [aws_region.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
@@ -235,8 +313,11 @@ aws securityhub list-enabled-products-for-import --region us-east-1
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_account_map"></a> [account\_map](#input\_account\_map) | Static account map configuration. Only used when `account_map_enabled` is `false`.<br/>Map keys use `tenant-stage` format (e.g., `core-security`, `core-audit`, `plat-prod`). | <pre>object({<br/>    full_account_map              = map(string)<br/>    audit_account_account_name    = optional(string, "")<br/>    root_account_account_name     = optional(string, "")<br/>    identity_account_account_name = optional(string, "")<br/>    aws_partition                 = optional(string, "aws")<br/>    iam_role_arn_templates        = optional(map(string), {})<br/>  })</pre> | <pre>{<br/>  "audit_account_account_name": "",<br/>  "aws_partition": "aws",<br/>  "full_account_map": {},<br/>  "iam_role_arn_templates": {},<br/>  "identity_account_account_name": "",<br/>  "root_account_account_name": ""<br/>}</pre> | no |
 | <a name="input_account_map_component_name"></a> [account\_map\_component\_name](#input\_account\_map\_component\_name) | The name of the account-map component | `string` | `"account-map"` | no |
+| <a name="input_account_map_enabled"></a> [account\_map\_enabled](#input\_account\_map\_enabled) | Enable the account map component. When true, the component fetches account mappings from the<br/>`account-map` component via remote state. When false (default), the component uses the static `account_map` variable instead. | `bool` | `false` | no |
 | <a name="input_account_map_tenant"></a> [account\_map\_tenant](#input\_account\_map\_tenant) | The tenant where the `account_map` component required by remote-state is deployed | `string` | `"core"` | no |
+| <a name="input_account_verification_enabled"></a> [account\_verification\_enabled](#input\_account\_verification\_enabled) | Enable account verification. When true (default), the component verifies that Terraform is executing<br/>in the correct AWS account by comparing the current account ID against the expected account from the<br/>account\_map based on the component's tenant-stage context. | `bool` | `true` | no |
 | <a name="input_additional_tag_map"></a> [additional\_tag\_map](#input\_additional\_tag\_map) | Additional key-value pairs to add to each map in `tags_as_list_of_maps`. Not added to `tags` or `id`.<br/>This is for some rare cases where resources want additional configuration of tags<br/>and therefore take a list of maps with tag key, value, and additional configuration. | `map(string)` | `{}` | no |
 | <a name="input_admin_delegated"></a> [admin\_delegated](#input\_admin\_delegated) | A flag to indicate if the AWS Organization-wide settings should be created. This can only be done after the Security<br/>  Hub Administrator account has already been delegated from the AWS Org Management account (usually 'root'). See the<br/>  Deployment section of the README for more information. | `bool` | `false` | no |
 | <a name="input_attributes"></a> [attributes](#input\_attributes) | ID element. Additional attributes (e.g. `workers` or `cluster`) to add to `id`,<br/>in the order they appear in the list. New attributes are appended to the<br/>end of the list. The elements of the list are joined by the `delimiter`<br/>and treated as a single ID element. | `list(string)` | `[]` | no |
@@ -251,15 +332,13 @@ aws securityhub list-enabled-products-for-import --region us-east-1
 | <a name="input_enabled"></a> [enabled](#input\_enabled) | Set to false to prevent the module from creating any resources | `bool` | `null` | no |
 | <a name="input_enabled_standards"></a> [enabled\_standards](#input\_enabled\_standards) | A list of standards to enable in the account.<br/><br/>  For example:<br/>  - standards/aws-foundational-security-best-practices/v/1.0.0<br/>  - ruleset/cis-aws-foundations-benchmark/v/1.2.0<br/>  - standards/pci-dss/v/3.2.1<br/>  - standards/cis-aws-foundations-benchmark/v/1.4.0 | `set(string)` | `[]` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | ID element. Usually used for region e.g. 'uw2', 'us-west-2', OR role 'prod', 'staging', 'dev', 'UAT' | `string` | `null` | no |
-| <a name="input_finding_aggregation_region"></a> [finding\_aggregation\_region](#input\_finding\_aggregation\_region) | If finding aggregation is enabled, the region that collects findings | `string` | `null` | no |
-| <a name="input_finding_aggregator_enabled"></a> [finding\_aggregator\_enabled](#input\_finding\_aggregator\_enabled) | Flag to indicate whether a finding aggregator should be created<br/><br/>If you want to aggregate findings from one region, set this to `true`.<br/><br/>For more information, see:<br/>https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_finding_aggregator | `bool` | `false` | no |
+| <a name="input_finding_aggregation_region"></a> [finding\_aggregation\_region](#input\_finding\_aggregation\_region) | If finding aggregation is enabled, the region that collects findings | `string` | `"us-east-1"` | no |
+| <a name="input_finding_aggregator_enabled"></a> [finding\_aggregator\_enabled](#input\_finding\_aggregator\_enabled) | Flag to indicate whether a finding aggregator should be created<br/><br/>If you want to aggregate findings from one region, set this to `true`.<br/><br/>For more information, see:<br/>https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_finding_aggregator | `bool` | `true` | no |
 | <a name="input_finding_aggregator_linking_mode"></a> [finding\_aggregator\_linking\_mode](#input\_finding\_aggregator\_linking\_mode) | Linking mode to use for the finding aggregator.<br/><br/>The possible values are:<br/>  - `ALL_REGIONS` - Aggregate from all regions<br/>  - `ALL_REGIONS_EXCEPT_SPECIFIED` - Aggregate from all regions except those specified in `var.finding_aggregator_regions`<br/>  - `SPECIFIED_REGIONS` - Aggregate from regions specified in `var.finding_aggregator_regions` | `string` | `"ALL_REGIONS"` | no |
 | <a name="input_finding_aggregator_regions"></a> [finding\_aggregator\_regions](#input\_finding\_aggregator\_regions) | A list of regions to aggregate findings from.<br/><br/>This is only used if `finding_aggregator_enabled` is `true`. | `any` | `null` | no |
 | <a name="input_findings_notification_arn"></a> [findings\_notification\_arn](#input\_findings\_notification\_arn) | The ARN for an SNS topic to send findings notifications to. This is only used if create\_sns\_topic is false.<br/>If you want to send findings to an existing SNS topic, set this to the ARN of the existing topic and set<br/>create\_sns\_topic to false. | `string` | `null` | no |
 | <a name="input_global_environment"></a> [global\_environment](#input\_global\_environment) | Global environment name | `string` | `"gbl"` | no |
 | <a name="input_id_length_limit"></a> [id\_length\_limit](#input\_id\_length\_limit) | Limit `id` to this many characters (minimum 6).<br/>Set to `0` for unlimited length.<br/>Set to `null` for keep the existing setting, which defaults to `0`.<br/>Does not affect `id_full`. | `number` | `null` | no |
-| <a name="input_import_profile_name"></a> [import\_profile\_name](#input\_import\_profile\_name) | AWS Profile name to use when importing a resource | `string` | `null` | no |
-| <a name="input_import_role_arn"></a> [import\_role\_arn](#input\_import\_role\_arn) | IAM Role ARN to use when importing a resource | `string` | `null` | no |
 | <a name="input_label_key_case"></a> [label\_key\_case](#input\_label\_key\_case) | Controls the letter case of the `tags` keys (label names) for tags generated by this module.<br/>Does not affect keys of tags passed in via the `tags` input.<br/>Possible values: `lower`, `title`, `upper`.<br/>Default value: `title`. | `string` | `null` | no |
 | <a name="input_label_order"></a> [label\_order](#input\_label\_order) | The order in which the labels (ID elements) appear in the `id`.<br/>Defaults to ["namespace", "environment", "stage", "name", "attributes"].<br/>You can omit any of the 6 labels ("tenant" is the 6th), but at least one must be present. | `list(string)` | `null` | no |
 | <a name="input_label_value_case"></a> [label\_value\_case](#input\_label\_value\_case) | Controls the letter case of ID elements (labels) as included in `id`,<br/>set as tag values, and output by this module individually.<br/>Does not affect values of tags passed in via the `tags` input.<br/>Possible values: `lower`, `title`, `upper` and `none` (no transformation).<br/>Set this to `title` and set `delimiter` to `""` to yield Pascal Case IDs.<br/>Default value: `lower`. | `string` | `null` | no |
@@ -267,8 +346,9 @@ aws securityhub list-enabled-products-for-import --region us-east-1
 | <a name="input_name"></a> [name](#input\_name) | ID element. Usually the component or solution name, e.g. 'app' or 'jenkins'.<br/>This is the only ID element not also included as a `tag`.<br/>The "name" tag is set to the full `id` string. There is no tag with the value of the `name` input. | `string` | `null` | no |
 | <a name="input_namespace"></a> [namespace](#input\_namespace) | ID element. Usually an abbreviation of your organization name, e.g. 'eg' or 'cp', to help ensure generated IDs are globally unique | `string` | `null` | no |
 | <a name="input_organization_management_account_name"></a> [organization\_management\_account\_name](#input\_organization\_management\_account\_name) | The name of the AWS Organization management account | `string` | `null` | no |
+| <a name="input_organizations_resource_policy_enabled"></a> [organizations\_resource\_policy\_enabled](#input\_organizations\_resource\_policy\_enabled) | Enable creation of the Organizations resource-based delegation policy for Security Hub. When true (default),<br/>the component creates an `aws_organizations_resource_policy` in the management account (Step 2) that grants the<br/>delegated administrator permissions to manage Security Hub policies via Organizations APIs.<br/><br/>Set to `false` if the Organizations resource policy is managed elsewhere (e.g., by another component or service).<br/>Note: `aws_organizations_resource_policy` is an organization-wide singleton — only one can exist per organization.<br/>If other services (e.g., AWS Backup, Inspector) need delegation policies, their statements must be combined into<br/>a single policy managed by one component. | `bool` | `true` | no |
 | <a name="input_privileged"></a> [privileged](#input\_privileged) | true if the default provider already has access to the backend | `bool` | `false` | no |
-| <a name="input_product_subscriptions"></a> [product\_subscriptions](#input\_product\_subscriptions) | Map of AWS service product subscriptions to enable in Security Hub.<br/>Product subscriptions allow Security Hub to receive findings from AWS security services.<br/><br/>Default values:<br/>- guardduty: true (enable GuardDuty findings integration)<br/>- inspector: true (enable Inspector findings integration)<br/>- macie: true (enable Macie findings integration)<br/>- config: true (enable Config findings integration)<br/>- access\_analyzer: true (enable Access Analyzer findings integration)<br/>- firewall\_manager: false (disabled by default - enable if using Firewall Manager)<br/><br/>Note: Product subscriptions can be enabled even if the source service is not yet deployed.<br/>The subscription will simply wait for findings once the service is enabled.<br/><br/>For more information, see:<br/>https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-findings-providers.html | <pre>object({<br/>    guardduty        = optional(bool, true)<br/>    inspector        = optional(bool, true)<br/>    macie            = optional(bool, true)<br/>    config           = optional(bool, true)<br/>    access_analyzer  = optional(bool, true)<br/>    firewall_manager = optional(bool, false)<br/>  })</pre> | `{}` | no |
+| <a name="input_product_subscriptions"></a> [product\_subscriptions](#input\_product\_subscriptions) | Map of AWS service product subscriptions to enable in Security Hub.<br/>Product subscriptions allow Security Hub to receive findings from AWS security services.<br/><br/>Default values:<br/>- guardduty: true (enable GuardDuty findings integration)<br/>- inspector: true (enable Inspector findings integration)<br/>- macie: false (disabled by default - enable if using Macie)<br/>- config: true (enable Config findings integration)<br/>- access\_analyzer: true (enable Access Analyzer findings integration)<br/>- firewall\_manager: false (disabled by default - enable if using Firewall Manager)<br/><br/>Note: Product subscriptions can be enabled even if the source service is not yet deployed.<br/>The subscription will simply wait for findings once the service is enabled.<br/><br/>For more information, see:<br/>https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-findings-providers.html | <pre>object({<br/>    guardduty        = optional(bool, true)<br/>    inspector        = optional(bool, true)<br/>    macie            = optional(bool, false)<br/>    config           = optional(bool, true)<br/>    access_analyzer  = optional(bool, true)<br/>    firewall_manager = optional(bool, false)<br/>  })</pre> | `{}` | no |
 | <a name="input_regex_replace_chars"></a> [regex\_replace\_chars](#input\_regex\_replace\_chars) | Terraform regular expression (regex) string.<br/>Characters matching the regex will be removed from the ID elements.<br/>If not set, `"/[^a-zA-Z0-9-]/"` is used to remove all characters other than hyphens, letters and digits. | `string` | `null` | no |
 | <a name="input_region"></a> [region](#input\_region) | AWS Region | `string` | n/a | yes |
 | <a name="input_root_account_stage"></a> [root\_account\_stage](#input\_root\_account\_stage) | The stage name for the Organization root (management) account. This is used to lookup account IDs from account names<br/>using the `account-map` component. | `string` | `"root"` | no |

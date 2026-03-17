@@ -3,7 +3,7 @@ locals {
   account_map = module.account_map.outputs.full_account_map
 
   current_account_id                     = one(data.aws_caller_identity.this[*].account_id)
-  member_account_id_list                 = [for a in keys(local.account_map) : (local.account_map[a]) if local.account_map[a] != local.current_account_id]
+  member_account_id_list                 = [for a in keys(local.account_map) : (local.account_map[a]) if local.account_map[a] != local.current_account_id && local.account_map[a] != local.org_management_account_id]
   org_delegated_administrator_account_id = local.account_map[var.delegated_administrator_account_name]
   org_management_account_id              = var.organization_management_account_name == null ? local.account_map[module.account_map.outputs.root_account_account_name] : local.account_map[var.organization_management_account_name]
   is_org_delegated_administrator_account = local.current_account_id == local.org_delegated_administrator_account_id
@@ -71,6 +71,8 @@ resource "awsutils_security_hub_organization_settings" "this" {
   count = local.create_org_configuration ? 1 : 0
 
   member_accounts = local.member_account_id_list
+
+  depends_on = [aws_securityhub_organization_configuration.this]
 }
 
 resource "aws_securityhub_organization_configuration" "this" {
@@ -78,4 +80,8 @@ resource "aws_securityhub_organization_configuration" "this" {
 
   auto_enable           = var.auto_enable_organization_members
   auto_enable_standards = var.default_standards_enabled ? "DEFAULT" : "NONE"
+
+  organization_configuration {
+    configuration_type = "LOCAL"
+  }
 }
