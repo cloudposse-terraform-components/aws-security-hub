@@ -37,6 +37,9 @@ integrated partner solutions.
 - **Alert Notifications and Automation**: Supports alert notifications through Amazon SNS and facilitates automation
   through integration with AWS Lambda for automated remediation actions.
 
+- **Automation Rules**: Supports org-wide Security Hub automation rules for suppressing known false-positive control
+  findings without disabling the control entirely.
+
 - **GovCloud Support**: All product subscription ARNs use partition-aware format, automatically supporting both
   Commercial AWS and GovCloud partitions.
 
@@ -51,6 +54,8 @@ integrated partner solutions.
 - **Compliance Standards**: Configurable security standards (CIS, PCI DSS, AWS Foundational Security Best Practices)
 - **Account Verification**: Optional safety check that validates Terraform is running in the correct AWS account
 - **Flexible Account Map**: Supports both remote-state account-map lookups and static account map variables (default)
+- **Finding Suppression via Automation Rules**: Configurable automation rules that suppress specific control findings
+  org-wide from the delegated administrator account, without disabling controls or migrating to CENTRAL configuration mode
 ## Usage
 
 **Stack Level**: Regional
@@ -220,6 +225,78 @@ This means the Organizations resource-based delegation policy is missing or inco
 atmos terraform apply aws-security-hub/root -s core-use1-root
 ```
 
+## Automation Rules (Suppress False-Positive Findings)
+
+Security Hub automation rules let you mutate findings as they are ingested — for example, marking findings from a known
+false-positive control as `SUPPRESSED` so they stop showing up in the active dashboard. Rules created in the delegated
+administrator account apply org-wide and work in **LOCAL** configuration mode (no CENTRAL migration required).
+
+This component exposes a `disabled_control_finding_reasons` variable that creates one
+[`aws_securityhub_automation_rule`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_automation_rule)
+per entry. Rules are only created during Step 3 (`org-settings` deployment, `admin_delegated = true`), so they live in
+the delegated administrator account alongside `aws_securityhub_organization_configuration`.
+
+### Example: Suppress Config.1 false positive
+
+The CloudPosse `aws-config` module provisions a custom IAM role for the AWS Config recorder. Security Hub's `Config.1`
+control then flags every account with reason code `CONFIG_RECORDER_CUSTOM_ROLE`, even though the custom role is a valid
+deployment pattern.
+
+```yaml
+# core-use1-security
+components:
+  terraform:
+    aws-security-hub/org-settings:
+      vars:
+        enabled: true
+        admin_delegated: true
+        disabled_control_finding_reasons:
+          config-1-custom-role:
+            control_id: "Config.1"
+            reason_code: "CONFIG_RECORDER_CUSTOM_ROLE"
+            disabled_reason: >-
+              False positive: CloudPosse aws-config module uses a custom IAM role
+              with equivalent permissions instead of AWSServiceRoleForConfig.
+```
+
+The resulting rule matches every `FAILED` / `ACTIVE` finding for the given `control_id` and sets workflow status to
+`SUPPRESSED` with a note containing `disabled_reason`. New findings are suppressed immediately; existing findings are
+re-evaluated by Security Hub (typically within 12–24 hours).
+
+### Variable reference
+
+| Field             | Required | Description                                                                                                                                                       |
+|-------------------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `control_id`      | yes      | Security Hub control ID (e.g., `Config.1`). The rule fires on every `FAILED`/`ACTIVE` finding for this control.                                                   |
+| `reason_code`     | no       | Optional label appended to the rule name. **Documentation only** — Security Hub's automation rule API cannot filter on `Compliance.StatusReasons[].ReasonCode`.   |
+| `disabled_reason` | yes      | Human-readable justification. Used as the rule description and as the note added to suppressed findings.                                                          |
+| `rule_order`      | no       | Rule precedence (1–1000, lower runs first). Defaults to `1`. Only relevant when multiple rules could match the same finding (rules are terminal — first wins).    |
+
+### Caveats
+
+- **No reason-code filtering**: AWS does not expose `ReasonCode` as a criterion for automation rules, so the suppression
+  applies to **all** `FAILED` findings for the configured `control_id`. If a control can fail for multiple distinct
+  reasons and you want to suppress only one, you must either accept the broader suppression or migrate to CENTRAL
+  configuration mode and use `aws_securityhub_configuration_policy` parameter overrides.
+- **Singleton-aware**: Rules use `for_each`, so adding/removing entries does not affect other entries.
+- **Rollback**: Removing an entry from the map deletes the rule on the next apply. Previously suppressed findings revert
+  to their original workflow status on the next Security Hub evaluation cycle.
+
+### Verification
+
+```bash
+# List automation rules in the delegated administrator account
+aws securityhub list-automation-rules --region us-east-1
+
+# Check that Config.1 findings are now suppressed
+aws securityhub get-findings \
+  --filters '{
+    "ComplianceSecurityControlId": [{"Value": "Config.1", "Comparison": "EQUALS"}],
+    "WorkflowStatus": [{"Value": "SUPPRESSED", "Comparison": "EQUALS"}]
+  }' \
+  --query 'length(Findings)'
+```
+
 ## Account Map Configuration
 
 The component supports two modes for resolving AWS account IDs:
@@ -272,7 +349,7 @@ vars:
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.4.0 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 5.33.0 |
 | <a name="requirement_awsutils"></a> [awsutils](#requirement\_awsutils) | >= 0.16.0 |
@@ -280,7 +357,7 @@ vars:
 ## Providers
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="provider_aws"></a> [aws](#provider\_aws) | >= 5.33.0 |
 | <a name="provider_awsutils"></a> [awsutils](#provider\_awsutils) | >= 0.16.0 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
@@ -288,7 +365,7 @@ vars:
 ## Modules
 
 | Name | Source | Version |
-|------|--------|---------|
+| ---- | ------ | ------- |
 | <a name="module_account_map"></a> [account\_map](#module\_account\_map) | cloudposse/stack-config/yaml//modules/remote-state | 1.8.0 |
 | <a name="module_security_hub"></a> [security\_hub](#module\_security\_hub) | cloudposse/security-hub/aws | 0.12.2 |
 | <a name="module_this"></a> [this](#module\_this) | cloudposse/label/null | 0.25.0 |
@@ -296,9 +373,10 @@ vars:
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [aws_organizations_resource_policy.security_hub](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_resource_policy) | resource |
 | [aws_securityhub_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_account) | resource |
+| [aws_securityhub_automation_rule.suppress_control_findings](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_automation_rule) | resource |
 | [aws_securityhub_organization_admin_account.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_organization_admin_account) | resource |
 | [aws_securityhub_organization_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_organization_configuration) | resource |
 | [aws_securityhub_product_subscription.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/securityhub_product_subscription) | resource |
@@ -312,7 +390,7 @@ vars:
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_account_map"></a> [account\_map](#input\_account\_map) | Static account map configuration. Only used when `account_map_enabled` is `false`.<br/>Map keys use `tenant-stage` format (e.g., `core-security`, `core-audit`, `plat-prod`). | <pre>object({<br/>    full_account_map              = map(string)<br/>    audit_account_account_name    = optional(string, "")<br/>    root_account_account_name     = optional(string, "")<br/>    identity_account_account_name = optional(string, "")<br/>    aws_partition                 = optional(string, "aws")<br/>    iam_role_arn_templates        = optional(map(string), {})<br/>  })</pre> | <pre>{<br/>  "audit_account_account_name": "",<br/>  "aws_partition": "aws",<br/>  "full_account_map": {},<br/>  "iam_role_arn_templates": {},<br/>  "identity_account_account_name": "",<br/>  "root_account_account_name": ""<br/>}</pre> | no |
 | <a name="input_account_map_component_name"></a> [account\_map\_component\_name](#input\_account\_map\_component\_name) | The name of the account-map component | `string` | `"account-map"` | no |
 | <a name="input_account_map_enabled"></a> [account\_map\_enabled](#input\_account\_map\_enabled) | Enable the account map component. When true, the component fetches account mappings from the<br/>`account-map` component via remote state. When false (default), the component uses the static `account_map` variable instead. | `bool` | `false` | no |
@@ -329,6 +407,7 @@ vars:
 | <a name="input_delegated_administrator_account_name"></a> [delegated\_administrator\_account\_name](#input\_delegated\_administrator\_account\_name) | The name of the account that is the AWS Organization Delegated Administrator account | `string` | `"core-security"` | no |
 | <a name="input_delimiter"></a> [delimiter](#input\_delimiter) | Delimiter to be used between ID elements.<br/>Defaults to `-` (hyphen). Set to `""` to use no delimiter at all. | `string` | `null` | no |
 | <a name="input_descriptor_formats"></a> [descriptor\_formats](#input\_descriptor\_formats) | Describe additional descriptors to be output in the `descriptors` output map.<br/>Map of maps. Keys are names of descriptors. Values are maps of the form<br/>`{<br/>  format = string<br/>  labels = list(string)<br/>}`<br/>(Type is `any` so the map values can later be enhanced to provide additional options.)<br/>`format` is a Terraform format string to be passed to the `format()` function.<br/>`labels` is a list of labels, in order, to pass to `format()` function.<br/>Label values will be normalized before being passed to `format()` so they will be<br/>identical to how they appear in `id`.<br/>Default is `{}` (`descriptors` output will be empty). | `any` | `{}` | no |
+| <a name="input_disabled_control_finding_reasons"></a> [disabled\_control\_finding\_reasons](#input\_disabled\_control\_finding\_reasons) | A map of Security Hub automation rules to suppress specific control findings.<br/>Each entry creates an automation rule (in the delegated administrator account) that sets<br/>matching findings to `SUPPRESSED`.<br/><br/>- control\_id:      The Security Hub control ID (e.g., "Config.1"). This is the only field<br/>                   used for matching; the rule fires on every FAILED/ACTIVE finding for the<br/>                   given control.<br/>- reason\_code:     Optional label appended to the rule name (e.g., "CONFIG\_RECORDER\_CUSTOM\_ROLE").<br/>                   Documentation/traceability only — Security Hub's automation rule API does<br/>                   not support filtering on `Compliance.StatusReasons[].ReasonCode`, so the<br/>                   suppression applies to all FAILED findings for `control_id`, regardless of<br/>                   the underlying reason.<br/>- disabled\_reason: Human-readable justification for the suppression, stored as the rule<br/>                   description and as the note on suppressed findings.<br/>- rule\_order:      Optional rule precedence (1–1000, lower runs first). Defaults to 1. Only<br/>                   relevant when multiple rules could match the same finding; rules are<br/>                   terminal, so the first match wins.<br/><br/>Rules only deploy when running in the delegated administrator account with<br/>`admin_delegated = true` (i.e., the same gate as `aws_securityhub_organization_configuration`). | <pre>map(object({<br/>    control_id      = string<br/>    reason_code     = optional(string)<br/>    disabled_reason = string<br/>    rule_order      = optional(number, 1)<br/>  }))</pre> | `{}` | no |
 | <a name="input_enabled"></a> [enabled](#input\_enabled) | Set to false to prevent the module from creating any resources | `bool` | `null` | no |
 | <a name="input_enabled_standards"></a> [enabled\_standards](#input\_enabled\_standards) | A list of standards to enable in the account.<br/><br/>  For example:<br/>  - standards/aws-foundational-security-best-practices/v/1.0.0<br/>  - ruleset/cis-aws-foundations-benchmark/v/1.2.0<br/>  - standards/pci-dss/v/3.2.1<br/>  - standards/cis-aws-foundations-benchmark/v/1.4.0 | `set(string)` | `[]` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | ID element. Usually used for region e.g. 'uw2', 'us-west-2', OR role 'prod', 'staging', 'dev', 'UAT' | `string` | `null` | no |
@@ -360,7 +439,7 @@ vars:
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_delegated_administrator_account_id"></a> [delegated\_administrator\_account\_id](#output\_delegated\_administrator\_account\_id) | The AWS Account ID of the AWS Organization delegated administrator account |
 | <a name="output_product_subscriptions"></a> [product\_subscriptions](#output\_product\_subscriptions) | ARNs of Security Hub product subscriptions for AWS service integrations |
 | <a name="output_sns_topic_name"></a> [sns\_topic\_name](#output\_sns\_topic\_name) | The name of the SNS topic created by the component |

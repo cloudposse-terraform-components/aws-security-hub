@@ -248,6 +248,62 @@ variable "subscribers" {
   DOC
 }
 
+variable "disabled_control_finding_reasons" {
+  type = map(object({
+    control_id      = string
+    reason_code     = optional(string)
+    disabled_reason = string
+    rule_order      = optional(number, 1)
+  }))
+  default     = {}
+  description = <<-DOC
+  A map of Security Hub automation rules to suppress specific control findings.
+  Each entry creates an automation rule (in the delegated administrator account) that sets
+  matching findings to `SUPPRESSED`.
+
+  - control_id:      The Security Hub control ID (e.g., "Config.1"). This is the only field
+                     used for matching; the rule fires on every FAILED/ACTIVE finding for the
+                     given control.
+  - reason_code:     Optional label appended to the rule name (e.g., "CONFIG_RECORDER_CUSTOM_ROLE").
+                     Documentation/traceability only — Security Hub's automation rule API does
+                     not support filtering on `Compliance.StatusReasons[].ReasonCode`, so the
+                     suppression applies to all FAILED findings for `control_id`, regardless of
+                     the underlying reason.
+  - disabled_reason: Human-readable justification for the suppression, stored as the rule
+                     description and as the note on suppressed findings.
+  - rule_order:      Optional rule precedence (1–1000, lower runs first). Defaults to 1. Only
+                     relevant when multiple rules could match the same finding; rules are
+                     terminal, so the first match wins.
+
+  Rules only deploy when running in the delegated administrator account with
+  `admin_delegated = true` (i.e., the same gate as `aws_securityhub_organization_configuration`).
+  DOC
+
+  validation {
+    condition = alltrue([
+      for v in values(var.disabled_control_finding_reasons) :
+      length(trimspace(v.control_id)) > 0
+    ])
+    error_message = "Each disabled_control_finding_reasons entry must set a non-empty control_id."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in values(var.disabled_control_finding_reasons) :
+      length(trimspace(v.disabled_reason)) > 0
+    ])
+    error_message = "Each disabled_control_finding_reasons entry must set a non-empty disabled_reason."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in values(var.disabled_control_finding_reasons) :
+      v.rule_order >= 1 && v.rule_order <= 1000
+    ])
+    error_message = "Each rule_order must be between 1 and 1000."
+  }
+}
+
 variable "product_subscriptions" {
   type = object({
     guardduty        = optional(bool, true)
