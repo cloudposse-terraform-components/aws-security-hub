@@ -85,6 +85,20 @@ variable "cloudwatch_event_rule_pattern_detail_type" {
   DOC
 }
 
+variable "finding_severity_labels" {
+  type        = list(string)
+  default     = []
+  description = <<-DOC
+  A list of finding severity labels used to filter which Security Hub findings are forwarded to notifications, e.g.
+  `["CRITICAL", "HIGH"]`. When empty (the default), findings of all severities matching
+  `cloudwatch_event_rule_pattern_detail_type` are forwarded, preserving prior behavior. Requires the underlying
+  `cloudposse/security-hub/aws` module `>= 0.13.0`.
+
+  For the list of valid severity labels, see:
+  https://docs.aws.amazon.com/securityhub/1.0/APIReference/API_Severity.html
+  DOC
+}
+
 variable "create_sns_topic" {
   type        = bool
   default     = false
