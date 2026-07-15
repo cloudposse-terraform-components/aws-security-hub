@@ -97,6 +97,13 @@ variable "finding_severity_labels" {
   For the list of valid severity labels, see:
   https://docs.aws.amazon.com/securityhub/1.0/APIReference/API_Severity.html
   DOC
+
+  validation {
+    condition = alltrue([
+      for label in var.finding_severity_labels : contains(["INFORMATIONAL", "LOW", "MEDIUM", "HIGH", "CRITICAL"], label)
+    ])
+    error_message = "finding_severity_labels may only contain: INFORMATIONAL, LOW, MEDIUM, HIGH, CRITICAL."
+  }
 }
 
 variable "create_sns_topic" {
