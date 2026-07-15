@@ -48,7 +48,7 @@ resource "aws_securityhub_account" "this" {
 module "security_hub" {
   count   = local.create_securityhub ? 1 : 0
   source  = "cloudposse/security-hub/aws"
-  version = "0.12.2"
+  version = "0.13.0"
 
 
   cloudwatch_event_rule_pattern_detail_type = var.cloudwatch_event_rule_pattern_detail_type
