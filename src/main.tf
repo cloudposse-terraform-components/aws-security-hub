@@ -52,6 +52,7 @@ module "security_hub" {
 
 
   cloudwatch_event_rule_pattern_detail_type = var.cloudwatch_event_rule_pattern_detail_type
+  finding_severity_labels                   = var.finding_severity_labels
   create_sns_topic                          = local.create_sns_topic
   enable_default_standards                  = var.default_standards_enabled
   enabled_standards                         = var.enabled_standards
