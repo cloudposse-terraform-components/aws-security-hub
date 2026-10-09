@@ -1,6 +1,6 @@
 module "account_map" {
   source  = "cloudposse/stack-config/yaml//modules/remote-state"
-  version = "1.8.0"
+  version = "1.8.1"
 
   component   = var.account_map_component_name
   tenant      = var.account_map_enabled ? coalesce(var.account_map_tenant, module.this.tenant) : null
