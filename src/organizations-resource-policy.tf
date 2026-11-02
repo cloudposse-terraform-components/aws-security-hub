@@ -147,6 +147,10 @@ resource "aws_organizations_resource_policy" "security_hub" {
           "organizations:DisablePolicyType",
         ]
         Resource = local.org_scoped_resource_arns
+        # EnablePolicyType/DisablePolicyType authorize against the root only, so without this condition the
+        # delegated administrator could disable SERVICE_CONTROL_POLICY (or any other policy type) org-wide.
+        # All seven actions support organizations:PolicyType, so IfExists is not needed.
+        Condition = { StringEquals = { "organizations:PolicyType" = ["SECURITYHUB_POLICY", "INSPECTOR_POLICY"] } }
       },
       {
         Sid       = "SecurityServicesDelegatingPolicyTagActions"
